@@ -16,7 +16,7 @@ const companyLinks = [
 
 const candidateLinks = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Browse Jobs", url: "/jobs", icon: Search },
+  { title: "Browse Jobs", url: "/candidate/jobs", icon: Search },
   { title: "My Applications", url: "/candidate/applications", icon: FileText },
   { title: "Profile", url: "/dashboard", icon: User },
 ];

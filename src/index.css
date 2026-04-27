@@ -1,8 +1,8 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap');
 
 @layer base {
   :root {
@@ -107,5 +107,58 @@
   
   .glass-card {
     @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-lg;
+  }
+}
+
+/* =========================
+   Resume print / PDF export
+   ========================= */
+
+@page {
+  size: A4;
+  margin: 12mm;
+}
+
+@media print {
+  /* Show only the resume preview area during print */
+  body * {
+    visibility: hidden !important;
+  }
+
+  #resume-print-root,
+  #resume-print-root * {
+    visibility: visible !important;
+  }
+
+  #resume-print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0;
+    padding: 0;
+    background: white;
+  }
+
+  .resume-page {
+    width: 210mm;
+    min-height: 297mm;
+    background: white;
+  }
+
+  .resume-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .resume-avoid-break {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Avoid weird shadows/borders on print */
+  .resume-print-no-shadow {
+    box-shadow: none !important;
   }
 }

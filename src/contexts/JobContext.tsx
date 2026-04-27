@@ -1,22 +1,31 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+
+import { apiGet, apiPost, apiPut, API_BASE_URL, getAccessToken } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+
+export type ApplicationStatus = "Pending" | "Shortlisted" | "Rejected";
 
 export interface Application {
   id: string;
   jobId: string;
-  candidateId: string;
+  candidateUserId: string;
   candidateName: string;
   candidateEmail: string;
-  resumeName: string;
-  coverLetter?: string;
+  resumeId?: string | null;
+  coverLetter?: string | null;
   appliedDate: string;
-  status: "Pending" | "Shortlisted" | "Rejected";
+  status: ApplicationStatus;
+  profileJson?: Record<string, unknown>;
+  // Convenience for candidate-side listing
+  jobTitle?: string;
+  companyName?: string;
 }
 
 export interface Job {
   id: string;
   title: string;
   company: string;
-  companyId: string;
+  companyId: string; // recruiter_user_id
   description: string;
   location: string;
   salaryRange: string;
@@ -28,79 +37,208 @@ export interface Job {
 interface JobContextType {
   jobs: Job[];
   applications: Application[];
-  addJob: (job: Omit<Job, "id" | "postedDate">) => void;
-  applyToJob: (app: Omit<Application, "id" | "appliedDate" | "status">) => void;
-  getJobApplications: (jobId: string) => Application[];
-  getCandidateApplications: (candidateId: string) => (Application & { jobTitle: string; companyName: string })[];
-  getCompanyJobs: (companyId: string) => Job[];
+  loadingJobs: boolean;
+  refreshJobs: () => Promise<void>;
+  refreshApplications: () => Promise<void>;
+  addJob: (job: Omit<Job, "id" | "postedDate" | "company" | "companyId">) => Promise<Job | null>;
+  applyToJob: (
+    jobId: string,
+    payload?: { coverLetter?: string; resumeId?: string; file?: File | null },
+  ) => Promise<{ ok: boolean; error?: string }>;
+  getJobApplications: (jobId: string) => Promise<Application[]>;
+  getCandidateApplications: () => Application[];
+  getCompanyJobs: (recruiterUserId: string) => Job[];
   getJobApplicantCount: (jobId: string) => number;
-  updateApplicationStatus: (appId: string, status: Application["status"]) => void;
+  updateApplicationStatus: (applicationId: string, status: ApplicationStatus) => Promise<void>;
 }
-
-const MOCK_JOBS: Job[] = [
-  {
-    id: "j1", title: "Senior Frontend Developer", company: "TechCorp", companyId: "c1",
-    description: "We're looking for a Senior Frontend Developer to join our team. You'll be working on cutting-edge web applications using React, TypeScript, and modern CSS. The ideal candidate has 5+ years of experience building responsive, accessible web interfaces.\n\nResponsibilities:\n• Lead frontend architecture decisions\n• Mentor junior developers\n• Collaborate with designers and backend engineers\n• Write clean, tested, maintainable code",
-    location: "San Francisco, CA", salaryRange: "$140,000 - $180,000", experience: "5+ years", type: "Full-time", postedDate: "2026-02-25"
-  },
-  {
-    id: "j2", title: "Product Designer", company: "TechCorp", companyId: "c1",
-    description: "Join our design team to create beautiful, intuitive user experiences. You'll work closely with product managers and engineers to design features used by millions.\n\nRequirements:\n• Strong portfolio demonstrating UX/UI skills\n• Experience with Figma and design systems\n• Understanding of accessibility standards\n• Excellent communication skills",
-    location: "Remote", salaryRange: "$120,000 - $155,000", experience: "3+ years", type: "Remote", postedDate: "2026-02-20"
-  },
-  {
-    id: "j3", title: "Backend Engineer", company: "InnovateLab", companyId: "c2",
-    description: "Build scalable backend services that power our platform. Work with Node.js, PostgreSQL, and cloud infrastructure to deliver reliable APIs.\n\nWhat we offer:\n• Competitive salary and equity\n• Flexible working hours\n• Learning budget\n• Health insurance",
-    location: "New York, NY", salaryRange: "$130,000 - $170,000", experience: "4+ years", type: "Full-time", postedDate: "2026-02-22"
-  },
-  {
-    id: "j4", title: "DevOps Engineer", company: "InnovateLab", companyId: "c2",
-    description: "Manage and improve our cloud infrastructure. Experience with AWS, Docker, Kubernetes, and CI/CD pipelines required.\n\nYou will:\n• Automate deployment processes\n• Monitor system performance\n• Implement security best practices\n• Collaborate with development teams",
-    location: "Austin, TX", salaryRange: "$125,000 - $160,000", experience: "3+ years", type: "Full-time", postedDate: "2026-02-18"
-  },
-];
-
-const MOCK_APPLICATIONS: Application[] = [
-  { id: "a1", jobId: "j1", candidateId: "u1", candidateName: "John Doe", candidateEmail: "john@test.com", resumeName: "john_doe_resume.pdf", appliedDate: "2026-02-26", status: "Pending" },
-  { id: "a2", jobId: "j3", candidateId: "u2", candidateName: "Jane Smith", candidateEmail: "jane@test.com", resumeName: "jane_smith_cv.pdf", coverLetter: "I'm excited about this opportunity...", appliedDate: "2026-02-24", status: "Shortlisted" },
-];
 
 const JobContext = createContext<JobContextType | null>(null);
 
+type ApiJob = {
+  id: string;
+  recruiter_user_id: string;
+  company_name: string;
+  title: string;
+  description: string;
+  location?: string | null;
+  salary_range?: string | null;
+  experience?: string | null;
+  type: string;
+  is_active: boolean;
+  created_at: string;
+};
+
+type ApiApplication = {
+  id: string;
+  job_id: string;
+  candidate_user_id: string;
+  resume_id?: string | null;
+  cover_letter?: string | null;
+  status: string;
+  profile_json?: Record<string, unknown>;
+  created_at: string;
+  job_title?: string;
+  company_name?: string;
+};
+
+function jobFromApi(j: ApiJob): Job {
+  return {
+    id: j.id,
+    title: j.title,
+    company: j.company_name,
+    companyId: j.recruiter_user_id,
+    description: j.description || "",
+    location: j.location || "",
+    salaryRange: j.salary_range || "",
+    experience: j.experience || "",
+    type: (j.type as Job["type"]) || "Full-time",
+    postedDate: (j.created_at || "").split("T")[0] || "",
+  };
+}
+
+function applicationFromApi(a: ApiApplication): Application {
+  const profile = (a.profile_json || {}) as Record<string, any>;
+  return {
+    id: a.id,
+    jobId: a.job_id,
+    candidateUserId: a.candidate_user_id,
+    candidateName: (profile.name as string) || "",
+    candidateEmail: (profile.email as string) || "",
+    resumeId: a.resume_id || null,
+    coverLetter: a.cover_letter || null,
+    appliedDate: (a.created_at || "").split("T")[0] || "",
+    status: ((a.status as ApplicationStatus) || "Pending") as ApplicationStatus,
+    profileJson: a.profile_json,
+    jobTitle: a.job_title,
+    companyName: a.company_name,
+  };
+}
+
 export function JobProvider({ children }: { children: ReactNode }) {
-  const [jobs, setJobs] = useState<Job[]>(MOCK_JOBS);
-  const [applications, setApplications] = useState<Application[]>(MOCK_APPLICATIONS);
+  const { user } = useAuth();
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
 
-  const addJob = (job: Omit<Job, "id" | "postedDate">) => {
-    setJobs((prev) => [...prev, { ...job, id: `j-${Date.now()}`, postedDate: new Date().toISOString().split("T")[0] }]);
+  const refreshJobs = useCallback(async () => {
+    setLoadingJobs(true);
+    try {
+      const list = await apiGet<ApiJob[]>("/api/v1/jobs");
+      setJobs(list.map(jobFromApi));
+    } catch {
+      setJobs([]);
+    } finally {
+      setLoadingJobs(false);
+    }
+  }, []);
+
+  const refreshApplications = useCallback(async () => {
+    if (!user || user.role !== "candidate") {
+      setApplications([]);
+      return;
+    }
+    try {
+      const list = await apiGet<ApiApplication[]>("/api/v1/applications/me");
+      setApplications(list.map(applicationFromApi));
+    } catch {
+      setApplications([]);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void refreshJobs();
+  }, [refreshJobs]);
+
+  useEffect(() => {
+    void refreshApplications();
+  }, [refreshApplications]);
+
+  const addJob: JobContextType["addJob"] = async (input) => {
+    try {
+      const created = await apiPost<ApiJob>("/api/v1/recruiter/jobs", {
+        title: input.title,
+        description: input.description,
+        location: input.location,
+        salary_range: input.salaryRange,
+        experience: input.experience,
+        type: input.type,
+      });
+      const j = jobFromApi(created);
+      setJobs((prev) => [j, ...prev]);
+      return j;
+    } catch {
+      return null;
+    }
   };
 
-  const applyToJob = (app: Omit<Application, "id" | "appliedDate" | "status">) => {
-    const exists = applications.find((a) => a.jobId === app.jobId && a.candidateId === app.candidateId);
-    if (exists) return;
-    setApplications((prev) => [...prev, { ...app, id: `a-${Date.now()}`, appliedDate: new Date().toISOString().split("T")[0], status: "Pending" }]);
+  const applyToJob: JobContextType["applyToJob"] = async (jobId, payload) => {
+    try {
+      const fd = new FormData();
+      if (payload?.coverLetter) fd.append("cover_letter", payload.coverLetter);
+      if (payload?.resumeId) fd.append("resume_id", payload.resumeId);
+      if (payload?.file) fd.append("file", payload.file);
+
+      const token = getAccessToken();
+      const res = await fetch(`${API_BASE_URL}/api/v1/jobs/${jobId}/apply`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        return { ok: false, error: body?.detail || `Apply failed (${res.status})` };
+      }
+      await refreshApplications();
+      return { ok: true };
+    } catch (e: any) {
+      return { ok: false, error: e?.message || "Apply failed" };
+    }
   };
 
-  const getJobApplications = (jobId: string) => applications.filter((a) => a.jobId === jobId);
-  
-  const getCandidateApplications = (candidateId: string) =>
-    applications.filter((a) => a.candidateId === candidateId).map((a) => {
-      const job = jobs.find((j) => j.id === a.jobId);
-      return { ...a, jobTitle: job?.title || "", companyName: job?.company || "" };
-    });
-
-  const getCompanyJobs = (companyId: string) => jobs.filter((j) => j.companyId === companyId);
-  const getJobApplicantCount = (jobId: string) => applications.filter((a) => a.jobId === jobId).length;
-
-  const updateApplicationStatus = (appId: string, status: Application["status"]) => {
-    setApplications((prev) => prev.map((a) => (a.id === appId ? { ...a, status } : a)));
+  const getJobApplications: JobContextType["getJobApplications"] = async (jobId) => {
+    try {
+      const list = await apiGet<ApiApplication[]>(`/api/v1/recruiter/jobs/${jobId}/applications`);
+      return list.map(applicationFromApi);
+    } catch {
+      return [];
+    }
   };
 
-  return (
-    <JobContext.Provider value={{ jobs, applications, addJob, applyToJob, getJobApplications, getCandidateApplications, getCompanyJobs, getJobApplicantCount, updateApplicationStatus }}>
-      {children}
-    </JobContext.Provider>
+  const getCandidateApplications = () => applications;
+
+  const getCompanyJobs = (recruiterUserId: string) =>
+    jobs.filter((j) => j.companyId === recruiterUserId);
+
+  // Best-effort cached count: real count requires a recruiter call to /applications.
+  const getJobApplicantCount = (_jobId: string) => 0;
+
+  const updateApplicationStatus: JobContextType["updateApplicationStatus"] = async (
+    applicationId,
+    status,
+  ) => {
+    await apiPut(`/api/v1/recruiter/applications/${applicationId}/status`, { status });
+  };
+
+  const value = useMemo<JobContextType>(
+    () => ({
+      jobs,
+      applications,
+      loadingJobs,
+      refreshJobs,
+      refreshApplications,
+      addJob,
+      applyToJob,
+      getJobApplications,
+      getCandidateApplications,
+      getCompanyJobs,
+      getJobApplicantCount,
+      updateApplicationStatus,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [jobs, applications, loadingJobs],
   );
+
+  return <JobContext.Provider value={value}>{children}</JobContext.Provider>;
 }
 
 export const useJobs = () => {

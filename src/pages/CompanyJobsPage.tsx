@@ -21,14 +21,14 @@ export default function CompanyJobsPage() {
           <h1 className="font-display text-2xl font-bold">My Jobs</h1>
           <p className="text-muted-foreground">{jobs.length} job{jobs.length !== 1 ? "s" : ""} posted</p>
         </div>
-        <Button onClick={() => navigate("/company/post-job")}>Post New Job</Button>
+        <Button onClick={() => navigate("/recruiter/post-job")}>Post New Job</Button>
       </div>
       {jobs.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">No jobs posted yet. Create your first listing!</CardContent></Card>
       ) : (
         <div className="grid gap-4">
           {jobs.map((job) => (
-            <Card key={job.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/company/jobs/${job.id}`)}>
+            <Card key={job.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/recruiter/jobs/${job.id}`)}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>

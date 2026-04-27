@@ -1,4 +1,7 @@
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
+
 import { useAuth } from "@/contexts/AuthContext";
 import { useJobs } from "@/contexts/JobContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,22 +12,27 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MapPin, DollarSign, Clock, Briefcase, Building2, ArrowLeft } from "lucide-react";
-import { useState } from "react";
-import { toast } from "sonner";
 
 export default function JobDetailPage() {
   const { id } = useParams();
-  const { jobs, applyToJob, applications } = useJobs();
+  const { jobs, applications, applyToJob, refreshApplications } = useJobs();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [showApply, setShowApply] = useState(false);
-  const [resumeName, setResumeName] = useState("");
   const [coverLetter, setCoverLetter] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
 
   const job = jobs.find((j) => j.id === id);
+
+  useEffect(() => {
+    if (user?.role === "candidate") void refreshApplications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
   if (!job) return <div className="text-center py-12 text-muted-foreground">Job not found</div>;
 
-  const alreadyApplied = user ? applications.some((a) => a.jobId === job.id && a.candidateId === user.id) : false;
+  const alreadyApplied = !!user && applications.some((a) => a.jobId === job.id);
 
   const handleApply = () => {
     if (!user) { navigate("/login"); return; }
@@ -32,22 +40,41 @@ export default function JobDetailPage() {
     setShowApply(true);
   };
 
-  const submitApplication = (e: React.FormEvent) => {
+  const submitApplication = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    applyToJob({
-      jobId: job.id,
-      candidateId: user.id,
-      candidateName: user.name,
-      candidateEmail: user.email,
-      resumeName: resumeName || "resume.pdf",
-      coverLetter,
-    });
-    setShowApply(false);
-    toast.success("Application submitted successfully!");
+    if (resumeFile) {
+      const isPdf = resumeFile.type === "application/pdf" || resumeFile.name.toLowerCase().endsWith(".pdf");
+      if (!isPdf) {
+        toast.error("Resume must be a PDF");
+        return;
+      }
+      if (resumeFile.size > 10 * 1024 * 1024) {
+        toast.error("PDF too large (max 10MB)");
+        return;
+      }
+    }
+    setSubmitting(true);
+    try {
+      const res = await applyToJob(job.id, { coverLetter, file: resumeFile });
+      if (res.ok) {
+        toast.success(
+          resumeFile
+            ? "Application submitted with your uploaded resume!"
+            : "Application submitted! Your saved resume (if any) was attached.",
+        );
+        setShowApply(false);
+        setCoverLetter("");
+        setResumeFile(null);
+      } else {
+        toast.error(res.error || "Could not apply.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const isStandalone = !user || user.role === "company";
+  const isStandalone = !user || user.role === "recruiter";
 
   return (
     <div className={isStandalone ? "min-h-screen" : ""}>
@@ -117,15 +144,31 @@ export default function JobDetailPage() {
               <Input value={user?.email || ""} disabled />
             </div>
             <div className="space-y-2">
-              <Label>Resume</Label>
-              <Input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setResumeName(e.target.files?.[0]?.name || "resume.pdf")} />
-              <p className="text-xs text-muted-foreground">Upload your resume (demo — file won't be stored)</p>
+              <Label>Resume (optional)</Label>
+              <Input
+                type="file"
+                accept="application/pdf"
+                onChange={(e) => setResumeFile(e.target.files?.[0] || null)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Upload a PDF to attach a different resume. If you leave this empty, your saved primary resume on
+                this site will be used. If you don't have one yet, your account name and email will be sent and
+                you can apply anyway.
+              </p>
+              {resumeFile && (
+                <p className="text-xs">
+                  Selected: <span className="font-medium">{resumeFile.name}</span> (
+                  {(resumeFile.size / 1024).toFixed(1)} KB)
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Cover Letter (Optional)</Label>
               <Textarea placeholder="Why are you a great fit?" rows={3} value={coverLetter} onChange={(e) => setCoverLetter(e.target.value)} />
             </div>
-            <Button type="submit" className="w-full">Submit Application</Button>
+            <Button type="submit" className="w-full" disabled={submitting}>
+              {submitting ? "Submitting..." : "Submit Application"}
+            </Button>
           </form>
         </DialogContent>
       </Dialog>

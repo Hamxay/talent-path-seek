@@ -12,6 +12,15 @@ dist
 dist-ssr
 *.local
 
+# Backend
+backend/.venv
+backend/uploads
+
+
+# Env files (never commit real secrets — only .env.example is tracked)
+backend/.env
+backend/.env.local
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +31,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+venv
+config.bat

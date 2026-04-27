@@ -14,14 +14,14 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = login(email, password);
+    const success = await login(email, password);
     if (success) {
       toast.success("Welcome back!");
       navigate("/dashboard");
     } else {
-      toast.error("Invalid credentials. Try company@test.com or john@test.com with password 'password'");
+      toast.error("Invalid credentials. Check your email and password.");
     }
   };
 
@@ -53,8 +53,7 @@ export default function LoginPage() {
           </p>
           <div className="mt-4 p-3 rounded-lg bg-muted text-xs text-muted-foreground space-y-1">
             <p className="font-medium text-foreground">Demo Accounts:</p>
-            <p>Company: company@test.com / password</p>
-            <p>Candidate: john@test.com / password</p>
+            <p>Create an account from Register page</p>
           </div>
         </CardContent>
       </Card>

@@ -14,16 +14,38 @@ export default function PostJobPage() {
   const { user } = useAuth();
   const { addJob } = useJobs();
   const navigate = useNavigate();
+  const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState({
-    title: "", description: "", location: "", salaryRange: "", experience: "", type: "Full-time" as const,
+    title: "",
+    description: "",
+    location: "",
+    salaryRange: "",
+    experience: "",
+    type: "Full-time" as const,
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    addJob({ ...form, company: user.company || user.name, companyId: user.id });
-    toast.success("Job published successfully!");
-    navigate("/company/jobs");
+    setSubmitting(true);
+    try {
+      const created = await addJob({
+        title: form.title,
+        description: form.description,
+        location: form.location,
+        salaryRange: form.salaryRange,
+        experience: form.experience,
+        type: form.type,
+      });
+      if (created) {
+        toast.success("Job published successfully!");
+        navigate("/recruiter/jobs");
+      } else {
+        toast.error("Failed to publish job");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -71,7 +93,9 @@ export default function PostJobPage() {
                 </Select>
               </div>
             </div>
-            <Button type="submit" className="w-full">Publish Job</Button>
+            <Button type="submit" className="w-full" disabled={submitting}>
+              {submitting ? "Publishing..." : "Publish Job"}
+            </Button>
           </form>
         </CardContent>
       </Card>

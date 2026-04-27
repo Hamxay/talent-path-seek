@@ -16,13 +16,18 @@ import CompanyJobDetailPage from "./pages/CompanyJobDetailPage";
 import BrowseJobsPage from "./pages/BrowseJobsPage";
 import JobDetailPage from "./pages/JobDetailPage";
 import CandidateApplicationsPage from "./pages/CandidateApplicationsPage";
+import CandidateResumeEditorPage from "./pages/CandidateResumeEditorPage";
+import RecruiterScreeningPage from "./pages/RecruiterScreeningPage";
+import RecruiterShortlistsPage from "./pages/RecruiterShortlistsPage";
+import RecruiterUploadsPage from "./pages/RecruiterUploadsPage";
 import DashboardLayout from "./components/DashboardLayout";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children, role }: { children: React.ReactNode; role?: string }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return <div className="p-6 text-muted-foreground">Loading...</div>;
   if (!user) return <Navigate to="/login" replace />;
   if (role && user.role !== role) return <Navigate to="/dashboard" replace />;
   return <>{children}</>;
@@ -45,13 +50,17 @@ function AppRoutes() {
       <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<DashboardPage />} />
 
-        {/* Company routes */}
-        <Route path="/company/post-job" element={<ProtectedRoute role="company"><PostJobPage /></ProtectedRoute>} />
-        <Route path="/company/jobs" element={<ProtectedRoute role="company"><CompanyJobsPage /></ProtectedRoute>} />
-        <Route path="/company/jobs/:id" element={<ProtectedRoute role="company"><CompanyJobDetailPage /></ProtectedRoute>} />
+        {/* Recruiter routes */}
+        <Route path="/recruiter/post-job" element={<ProtectedRoute role="recruiter"><PostJobPage /></ProtectedRoute>} />
+        <Route path="/recruiter/jobs" element={<ProtectedRoute role="recruiter"><CompanyJobsPage /></ProtectedRoute>} />
+        <Route path="/recruiter/jobs/:id" element={<ProtectedRoute role="recruiter"><CompanyJobDetailPage /></ProtectedRoute>} />
+        <Route path="/recruiter/uploads" element={<ProtectedRoute role="recruiter"><RecruiterUploadsPage /></ProtectedRoute>} />
+        <Route path="/recruiter/screening" element={<ProtectedRoute role="recruiter"><RecruiterScreeningPage /></ProtectedRoute>} />
+        <Route path="/recruiter/shortlists" element={<ProtectedRoute role="recruiter"><RecruiterShortlistsPage /></ProtectedRoute>} />
 
         {/* Candidate routes inside dashboard */}
         <Route path="/candidate/applications" element={<ProtectedRoute role="candidate"><CandidateApplicationsPage /></ProtectedRoute>} />
+        <Route path="/candidate/resume" element={<ProtectedRoute role="candidate"><CandidateResumeEditorPage /></ProtectedRoute>} />
         
         {/* Candidate browse jobs inside dashboard */}
         <Route path="/candidate/jobs" element={<ProtectedRoute role="candidate"><BrowseJobsPage /></ProtectedRoute>} />

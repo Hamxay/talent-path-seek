@@ -18,14 +18,14 @@ export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = register(name, email, password, role, company);
+    const success = await register(name, email, password, role, company);
     if (success) {
       toast.success("Account created!");
       navigate("/dashboard");
     } else {
-      toast.error("Email already exists");
+      toast.error("Could not create account. Try a different email.");
     }
   };
 
@@ -49,8 +49,8 @@ export default function RegisterPage() {
                   <Label htmlFor="candidate" className="cursor-pointer">Candidate</Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="company" id="company" />
-                  <Label htmlFor="company" className="cursor-pointer">Company</Label>
+                  <RadioGroupItem value="recruiter" id="recruiter" />
+                  <Label htmlFor="recruiter" className="cursor-pointer">Recruiter</Label>
                 </div>
               </RadioGroup>
             </div>
@@ -58,7 +58,7 @@ export default function RegisterPage() {
               <Label htmlFor="name">Full Name</Label>
               <Input id="name" placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
-            {role === "company" && (
+            {role === "recruiter" && (
               <div className="space-y-2">
                 <Label htmlFor="companyName">Company Name</Label>
                 <Input id="companyName" placeholder="Your company" value={company} onChange={(e) => setCompany(e.target.value)} required />

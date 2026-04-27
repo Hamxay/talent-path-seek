@@ -6,13 +6,13 @@ import { Navigate } from "react-router-dom";
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const { getCompanyJobs, getCandidateApplications, applications } = useJobs();
+  const { getCompanyJobs, getCandidateApplications } = useJobs();
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (user.role === "company") {
+  if (user.role === "recruiter") {
     const myJobs = getCompanyJobs(user.id);
-    const totalApps = applications.filter((a) => myJobs.some((j) => j.id === a.jobId)).length;
+    const totalApps = 0;
 
     return (
       <div className="space-y-6 animate-fade-in">
@@ -43,7 +43,7 @@ export default function DashboardPage() {
   }
 
   // Candidate dashboard
-  const myApps = getCandidateApplications(user.id);
+  const myApps = getCandidateApplications();
   return (
     <div className="space-y-6 animate-fade-in">
       <div>

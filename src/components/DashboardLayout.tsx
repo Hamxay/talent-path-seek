@@ -5,35 +5,36 @@ import {
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarProvider, SidebarTrigger, useSidebar,
 } from "@/components/ui/sidebar";
 import { NavLink } from "@/components/NavLink";
-import { useLocation } from "react-router-dom";
-import { LayoutDashboard, PlusCircle, Briefcase, LogOut, Search, FileText, User } from "lucide-react";
+import { LayoutDashboard, PlusCircle, Briefcase, LogOut, Search, FileText, User, Trophy, Upload } from "lucide-react";
 
-const companyLinks = [
+const recruiterLinks = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Post Job", url: "/company/post-job", icon: PlusCircle },
-  { title: "My Jobs", url: "/company/jobs", icon: Briefcase },
+  { title: "Post Job", url: "/recruiter/post-job", icon: PlusCircle },
+  { title: "My Jobs", url: "/recruiter/jobs", icon: Briefcase },
+  { title: "Upload CVs", url: "/recruiter/uploads", icon: Upload },
+  { title: "Screening Results", url: "/recruiter/screening", icon: Trophy },
+  { title: "Shortlists", url: "/recruiter/shortlists", icon: FileText },
 ];
 
 const candidateLinks = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Browse Jobs", url: "/candidate/jobs", icon: Search },
   { title: "My Applications", url: "/candidate/applications", icon: FileText },
-  { title: "Profile", url: "/dashboard", icon: User },
+  { title: "Resume Builder", url: "/candidate/resume", icon: User },
 ];
 
 function AppSidebar() {
   const { user, logout } = useAuth();
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const location = useLocation();
-  const links = user?.role === "company" ? companyLinks : candidateLinks;
+  const links = user?.role === "recruiter" ? recruiterLinks : candidateLinks;
 
   return (
     <Sidebar collapsible="icon">
       <SidebarContent className="flex flex-col justify-between h-full">
         <SidebarGroup>
           <SidebarGroupLabel className="text-sidebar-foreground/60">
-            {!collapsed && (user?.role === "company" ? "Company Portal" : "Candidate Portal")}
+            {!collapsed && (user?.role === "recruiter" ? "Recruiter Portal" : "Candidate Portal")}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

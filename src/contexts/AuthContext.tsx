@@ -1,57 +1,106 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { apiGet, apiPost, clearTokens, setTokens } from "@/lib/api";
 
-export type UserRole = "company" | "candidate";
+export type UserRole = "recruiter" | "candidate";
 
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
-  company?: string;
+  company_name?: string | null;
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => boolean;
-  register: (name: string, email: string, password: string, role: UserRole, company?: string) => boolean;
-  logout: () => void;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (name: string, email: string, password: string, role: UserRole, companyName?: string) => Promise<boolean>;
+  logout: () => Promise<void>;
+  refreshMe: () => Promise<void>;
 }
-
-const MOCK_USERS: (User & { password: string })[] = [
-  { id: "c1", name: "TechCorp HR", email: "company@test.com", password: "password", role: "company", company: "TechCorp" },
-  { id: "c2", name: "InnovateLab", email: "innovate@test.com", password: "password", role: "company", company: "InnovateLab" },
-  { id: "u1", name: "John Doe", email: "john@test.com", password: "password", role: "candidate" },
-  { id: "u2", name: "Jane Smith", email: "jane@test.com", password: "password", role: "candidate" },
-];
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [users, setUsers] = useState(MOCK_USERS);
   const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const login = (email: string, password: string): boolean => {
-    const found = users.find((u) => u.email === email && u.password === password);
-    if (found) {
-      const { password: _, ...userData } = found;
-      setUser(userData);
-      return true;
+  const refreshMe = async () => {
+    try {
+      const me = await apiGet<User>("/api/v1/me");
+      setUser(me);
+    } catch {
+      setUser(null);
     }
-    return false;
   };
 
-  const register = (name: string, email: string, password: string, role: UserRole, company?: string): boolean => {
-    if (users.find((u) => u.email === email)) return false;
-    const newUser = { id: `user-${Date.now()}`, name, email, password, role, company: role === "company" ? (company || name) : undefined };
-    setUsers((prev) => [...prev, newUser]);
-    const { password: _, ...userData } = newUser;
-    setUser(userData);
-    return true;
+  useEffect(() => {
+    (async () => {
+      await refreshMe();
+      setLoading(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      const data = await apiPost<{ access_token: string; refresh_token: string; user: User }>(
+        "/api/v1/auth/login",
+        { email, password },
+        { auth: false },
+      );
+      setTokens({ access_token: data.access_token, refresh_token: data.refresh_token });
+      setUser(data.user);
+      return true;
+    } catch {
+      return false;
+    }
   };
 
-  const logout = () => setUser(null);
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    role: UserRole,
+    companyName?: string,
+  ): Promise<boolean> => {
+    try {
+      const payload =
+        role === "recruiter"
+          ? { name, email, password, role, company_name: companyName }
+          : { name, email, password, role };
 
-  return <AuthContext.Provider value={{ user, login, register, logout }}>{children}</AuthContext.Provider>;
+      const data = await apiPost<{ access_token: string; refresh_token: string; user: User }>(
+        "/api/v1/auth/register",
+        payload,
+        { auth: false },
+      );
+      setTokens({ access_token: data.access_token, refresh_token: data.refresh_token });
+      setUser(data.user);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await apiPost("/api/v1/auth/logout", undefined);
+    } catch {
+      // ignore network errors; still clear local session
+    } finally {
+      clearTokens();
+      setUser(null);
+    }
+  };
+
+  const value = useMemo(
+    () => ({ user, loading, login, register, logout, refreshMe }),
+    [user, loading],
+  );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => {

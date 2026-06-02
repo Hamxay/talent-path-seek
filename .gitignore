@@ -32,4 +32,3 @@ backend/.env.local
 *.sln
 *.sw?
 venv
-config.bat

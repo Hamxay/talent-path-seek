@@ -22,7 +22,6 @@ backend/.env
 backend/.env.local
 
 # Editor directories and files
-.vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
@@ -35,3 +34,4 @@ venv
 branch_structure.json
 temp_auto_push.bat
 temp_interactive_push.bat
+config.bat
